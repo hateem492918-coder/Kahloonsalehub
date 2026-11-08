@@ -11,7 +11,8 @@ function priceOrderItems(items, productsById) {
       error.code = "failed-precondition";
       throw error;
     }
-    if (!Number.isSafeInteger(product.pricePkr) || product.pricePkr < 1) {
+    if (typeof product.name !== "string" || product.name.trim().length === 0
+        || !Number.isSafeInteger(product.pricePkr) || product.pricePkr < 1) {
       const error = new Error("A product price is not configured correctly.");
       error.code = "failed-precondition";
       throw error;

@@ -4,7 +4,7 @@
   "description": "Firebase backend for Kahloon Sale Hub",
   "main": "index.js",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "scripts": {
     "test": "node --test",

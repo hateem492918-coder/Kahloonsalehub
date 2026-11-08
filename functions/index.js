@@ -64,7 +64,7 @@ exports.placeOrder = onCall({ enforceAppCheck: true }, async (request) => {
     transaction.create(orderRef, {
       uid,
       requestId: order.requestId,
-      orderNumber: order.requestId.substring(0, 8).toUpperCase(),
+      orderNumber: order.requestId.substring(0, 12).toUpperCase(),
       customer: order.customer,
       items: pricedOrder.orderItems,
       currency: "PKR",
@@ -77,7 +77,7 @@ exports.placeOrder = onCall({ enforceAppCheck: true }, async (request) => {
 
     return {
       orderId: orderRef.id,
-      orderNumber: order.requestId.substring(0, 8).toUpperCase(),
+      orderNumber: order.requestId.substring(0, 12).toUpperCase(),
       status: "confirmed",
       totalPkr: pricedOrder.totalPkr,
       paymentMethod: "cod"

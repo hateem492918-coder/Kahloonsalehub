@@ -7,18 +7,25 @@
 - Run one unit test class: `./gradlew :app:testDebugUnitTest --tests 'com.kahloonsalehub.SomeTest'`
 - Run Android lint: `./gradlew :app:lintDebug`
 - The project uses Android Gradle Plugin 8.7.3, compile/target SDK 35, min SDK 23, and Java 17.
-- Tests and lint tasks may need to be added alongside future features; there are no tests or CI workflows in the current project.
+- Firebase backend checks: from `functions/`, run `npm test` and `npm run lint`.
+- Run one backend test file from `functions/` with `node --test test/order-validation.test.js`.
+- The Firebase Functions runtime is Node 20 (`.nvmrc`).
+- No CI workflow is configured.
 
 ## High-level architecture
 
 - This is a native Java Android app with a single `app` module and a programmatic, single-activity storefront UI in `MainActivity`.
-- `StoreDatabase` is the local source of truth: it seeds the sample catalog and persists cart quantities and placed cash-on-delivery orders in SQLite. `Product` and `CartLine` are the small data models used by the UI and database.
-- The activity swaps between home/search/category browsing, product detail, cart, checkout, and order confirmation. Cart and order data survive app restarts; sample product data does not come from a network service.
-- This is a local-first starter, not a connected marketplace backend. Do not imply that checkout transmits an order or performs payment.
+- `FirebaseRepository` reads active products from Firestore and submits checkout through the `placeOrder` HTTPS callable in `functions/index.js`. Anonymous Firebase Auth identifies guest orders; App Check protects the order function.
+- `StoreDatabase` remains the local catalog fallback and persists cart quantities in SQLite. `Product` and `CartLine` are shared app models.
+- The Functions backend uses Firestore as the source for product prices and order records. `functions/src/order-validation.js` validates client input; `functions/src/order-pricing.js` calculates totals from server catalog data. `functions/scripts/seed-products.js` initializes the demo catalog from `functions/src/catalog.js`.
+- Firestore rules expose active products as read-only and restrict order reads to the authenticated owner. Client-side order writes are denied; Cloud Functions uses the Admin SDK to create orders.
+- Order submission currently supports remote cash-on-delivery orders. Easypaisa is not active until merchant API documentation and a verified callback/signature contract are available; never invent provider protocol details or put secrets in the Android app.
 
 ## Key conventions
 
 - Keep Android code under package `com.kahloonsalehub` and follow the existing Java/Gradle module structure.
-- Keep catalog/cart/order persistence in `StoreDatabase`; when changing its schema, increment `DATABASE_VERSION` and implement a migration rather than dropping user data.
+- Keep cart persistence in `StoreDatabase`; when changing its schema, increment `DATABASE_VERSION` and implement a migration rather than dropping user data.
 - The UI is built with platform Android views without a UI framework dependency. Preserve the existing orange/neutral visual palette and keep currency display in PKR (`Rs`).
-- Treat current product records as demonstration content. Product/category/search filtering should continue to use parameterized SQLite queries.
+- Treat the sample catalog as demonstration content. Product IDs in Firestore must remain numeric strings because the Android cart stores product IDs as SQLite integers.
+- Keep order totals authoritative on the server. Callable input contains product IDs and quantities only; do not trust a client-supplied price or total.
+- Keep Firebase project configuration (`app/google-services.json`) and local credentials out of version control. Update Firestore rules with any new client access paths.

@@ -30,7 +30,7 @@ function normalizeOrderRequest(data) {
   if (name.length < 2 || name.length > 100) {
     throw invalid("Enter a name between 2 and 100 characters.");
   }
-  if (phoneDigits.length < 10 || phoneDigits.length > 15) {
+  if (!/^\+?[0-9\s()-]+$/.test(phone) || phoneDigits.length < 10 || phoneDigits.length > 15) {
     throw invalid("Enter a valid phone number.");
   }
   if (address.length < 8 || address.length > 500) {
