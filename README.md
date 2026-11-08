@@ -17,12 +17,13 @@ Install on a connected device or emulator with:
 ```
 
 The project requires Android SDK 35 and Java 17, with API 23 as its minimum supported Android version.
+The Firebase Functions backend uses Node 22.
 
 ## Firebase setup
 
 1. Create a Firebase project and register an Android app with package name `com.kahloonsalehub`.
 2. Download its `google-services.json` into `app/`. This file is ignored by Git and must not be committed.
-3. Enable **Anonymous** sign-in in Firebase Authentication and create the default Cloud Firestore database.
+3. Enable **Anonymous** sign-in in Firebase Authentication and create the default Cloud Firestore database in `asia-south1` to match the order function region.
 4. Install Firebase CLI, sign in with `firebase login`, then deploy the backend and Firestore rules:
 
    ```sh

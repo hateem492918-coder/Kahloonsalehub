@@ -141,12 +141,12 @@ final class StoreDatabase extends SQLiteOpenHelper {
         getWritableDatabase().delete("cart", null, null);
     }
 
-    void addToCart(long productId) {
+    boolean addToCart(long productId) {
         SQLiteDatabase db = getWritableDatabase();
         db.beginTransaction();
         try {
             android.database.sqlite.SQLiteStatement statement = db.compileStatement(
-                    "UPDATE cart SET quantity = quantity + 1 WHERE product_id = ?");
+                    "UPDATE cart SET quantity = quantity + 1 WHERE product_id = ? AND quantity < 20");
             statement.bindLong(1, productId);
             int updated;
             try {
@@ -155,12 +155,19 @@ final class StoreDatabase extends SQLiteOpenHelper {
                 statement.close();
             }
             if (updated == 0) {
+                try (Cursor cursor = db.query("cart", new String[]{"quantity"}, "product_id = ?",
+                        new String[]{String.valueOf(productId)}, null, null, null)) {
+                    if (cursor.moveToFirst()) {
+                        return false;
+                    }
+                }
                 ContentValues values = new ContentValues();
                 values.put("product_id", productId);
                 values.put("quantity", 1);
                 db.insertOrThrow("cart", null, values);
             }
             db.setTransactionSuccessful();
+            return true;
         } finally {
             db.endTransaction();
         }
@@ -168,6 +175,9 @@ final class StoreDatabase extends SQLiteOpenHelper {
 
     void setCartQuantity(long productId, int quantity) {
         SQLiteDatabase db = getWritableDatabase();
+        if (quantity > 20) {
+            return;
+        }
         if (quantity <= 0) {
             db.delete("cart", "product_id = ?", new String[]{String.valueOf(productId)});
             return;

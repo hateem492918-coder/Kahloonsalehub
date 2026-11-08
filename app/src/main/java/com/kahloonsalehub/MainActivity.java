@@ -18,7 +18,6 @@ import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
 
 public final class MainActivity extends Activity {
@@ -28,6 +27,8 @@ public final class MainActivity extends Activity {
     private static final int CANVAS = Color.rgb(247, 248, 250);
     private static final int BORDER = Color.rgb(232, 234, 237);
     private static final String[] CATEGORIES = {"All", "Electronics", "Fashion", "Home", "Beauty", "Sports"};
+    private static final String CHECKOUT_PREFS = "checkout";
+    private static final String CHECKOUT_REQUEST_ID = "request_id";
 
     private StoreDatabase database;
     private FirebaseRepository firebaseRepository;
@@ -40,6 +41,7 @@ public final class MainActivity extends Activity {
     private String lastOrderNumber = "";
     private long lastOrderTotalPkr;
     private String checkoutRequestId;
+    private boolean placingOrder;
     private LinearLayout root;
     private LinearLayout content;
     private TextView headerCartCount;
@@ -49,17 +51,26 @@ public final class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         database = new StoreDatabase(this);
+        checkoutRequestId = getSharedPreferences(CHECKOUT_PREFS, MODE_PRIVATE)
+                .getString(CHECKOUT_REQUEST_ID, null);
         try {
             firebaseRepository = new FirebaseRepository(this);
             firebaseRepository.loadProducts(products -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
                 remoteProducts = products;
                 remoteCatalogLoaded = true;
                 database.syncProducts(products);
                 if ("home".equals(screen)) {
                     render();
                 }
-            }, error -> Toast.makeText(this, "Could not load the online catalog: " +
-                    error.getLocalizedMessage(), Toast.LENGTH_LONG).show());
+            }, error -> {
+                if (!isFinishing() && !isDestroyed()) {
+                    Toast.makeText(this, "Could not load the online catalog: " +
+                            error.getLocalizedMessage(), Toast.LENGTH_LONG).show();
+                }
+            });
         } catch (IllegalStateException exception) {
             Toast.makeText(this, exception.getMessage(), Toast.LENGTH_LONG).show();
         }
@@ -75,7 +86,10 @@ public final class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         if ("checkout".equals(screen)) {
-            checkoutRequestId = null;
+            if (placingOrder) {
+                return;
+            }
+            clearCheckoutRequestId();
             screen = "cart";
         } else if ("detail".equals(screen) || "cart".equals(screen)) {
             screen = "home";
@@ -254,7 +268,11 @@ public final class MainActivity extends Activity {
         add.setPadding(dp(8), dp(6), dp(8), dp(6));
         add.setBackground(roundRect(Color.rgb(255, 243, 235), Color.rgb(255, 243, 235), 0, 10));
         add.setOnClickListener(v -> {
-            database.addToCart(product.id);
+            if (!database.addToCart(product.id)) {
+                Toast.makeText(this, "You have reached the 20-item limit for this product.",
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
             refreshCartCount();
             Toast.makeText(this, "Added to your cart", Toast.LENGTH_SHORT).show();
         });
@@ -295,7 +313,11 @@ public final class MainActivity extends Activity {
                 marginParams(-1, -2, 0, 20, 0, 0));
         Button add = primaryButton("Add to cart");
         add.setOnClickListener(v -> {
-            database.addToCart(product.id);
+            if (!database.addToCart(product.id)) {
+                Toast.makeText(this, "You have reached the 20-item limit for this product.",
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
             Toast.makeText(this, "Added to your cart", Toast.LENGTH_SHORT).show();
             screen = "cart";
             render();
@@ -340,7 +362,9 @@ public final class MainActivity extends Activity {
                     marginParams(-1, -2, 0, 7, 0, 13));
             Button checkout = primaryButton("Continue to checkout");
             checkout.setOnClickListener(v -> {
-                checkoutRequestId = UUID.randomUUID().toString();
+                if (checkoutRequestId == null) {
+                    createCheckoutRequestId();
+                }
                 screen = "checkout";
                 render();
             });
@@ -378,6 +402,11 @@ public final class MainActivity extends Activity {
         qtyRow.addView(qty, new LinearLayout.LayoutParams(dp(32), -2));
         TextView plus = quantityButton("+");
         plus.setOnClickListener(v -> {
+            if (line.quantity >= 20) {
+                Toast.makeText(this, "You have reached the 20-item limit for this product.",
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
             database.setCartQuantity(line.product.id, line.quantity + 1);
             render();
         });
@@ -433,11 +462,14 @@ public final class MainActivity extends Activity {
             String customerName = name.getText().toString().trim();
             String customerPhone = phone.getText().toString().trim();
             String customerAddress = address.getText().toString().trim();
-            if (customerName.isEmpty() || customerPhone.isEmpty() || customerAddress.isEmpty()) {
+            if (customerName.length() < 2 || customerName.length() > 100
+                    || customerAddress.length() < 8 || customerAddress.length() > 500) {
                 Toast.makeText(this, "Please complete all delivery details.", Toast.LENGTH_SHORT).show();
                 return;
             }
-            if (customerPhone.replaceAll("\\D", "").length() < 10) {
+            String phoneDigits = customerPhone.replaceAll("\\D", "");
+            if (!customerPhone.matches("\\+?[0-9\\s()-]+")
+                    || phoneDigits.length() < 10 || phoneDigits.length() > 15) {
                 phone.setError("Enter a valid phone number");
                 return;
             }
@@ -454,11 +486,16 @@ public final class MainActivity extends Activity {
                 return;
             }
             if (checkoutRequestId == null) {
-                checkoutRequestId = UUID.randomUUID().toString();
+                createCheckoutRequestId();
             }
             placeOrder.setEnabled(false);
+            placingOrder = true;
             firebaseRepository.placeOrder(checkoutRequestId, customerName, customerPhone, customerAddress, cart,
                     result -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                placingOrder = false;
                 Object orderNumber = result.get("orderNumber");
                 Object total = result.get("totalPkr");
                 if (!(orderNumber instanceof String) || !(total instanceof Number)) {
@@ -469,10 +506,14 @@ public final class MainActivity extends Activity {
                 lastOrderNumber = (String) orderNumber;
                 lastOrderTotalPkr = ((Number) total).longValue();
                 database.clearCart();
-                checkoutRequestId = null;
+                clearCheckoutRequestId();
                 screen = "success";
                 render();
             }, error -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                placingOrder = false;
                 placeOrder.setEnabled(true);
                 String message = error.getLocalizedMessage();
                 Toast.makeText(this, "Order could not be placed" +
@@ -672,6 +713,22 @@ public final class MainActivity extends Activity {
             return null;
         }
         return database.getProduct(id);
+    }
+
+    private void createCheckoutRequestId() {
+        checkoutRequestId = UUID.randomUUID().toString();
+        getSharedPreferences(CHECKOUT_PREFS, MODE_PRIVATE)
+                .edit()
+                .putString(CHECKOUT_REQUEST_ID, checkoutRequestId)
+                .apply();
+    }
+
+    private void clearCheckoutRequestId() {
+        checkoutRequestId = null;
+        getSharedPreferences(CHECKOUT_PREFS, MODE_PRIVATE)
+                .edit()
+                .remove(CHECKOUT_REQUEST_ID)
+                .apply();
     }
 
     private String formatPrice(long amount) {

@@ -9,7 +9,7 @@
 - The project uses Android Gradle Plugin 8.7.3, compile/target SDK 35, min SDK 23, and Java 17.
 - Firebase backend checks: from `functions/`, run `npm test` and `npm run lint`.
 - Run one backend test file from `functions/` with `node --test test/order-validation.test.js`.
-- The Firebase Functions runtime is Node 20 (`.nvmrc`).
+- The Firebase Functions runtime is Node 22 (`.nvmrc`).
 - No CI workflow is configured.
 
 ## High-level architecture

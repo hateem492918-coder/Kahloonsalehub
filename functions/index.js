@@ -4,7 +4,7 @@ const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
-const { normalizeOrderRequest } = require("./src/order-validation");
+const { matchesOrderRequest, normalizeOrderRequest } = require("./src/order-validation");
 const { priceOrderItems } = require("./src/order-pricing");
 
 setGlobalOptions({ region: "asia-south1" });
@@ -35,6 +35,10 @@ exports.placeOrder = onCall({ enforceAppCheck: true }, async (request) => {
       const saved = existing.data();
       if (saved.uid !== uid) {
         throw new HttpsError("permission-denied", "This order request is not available.");
+      }
+      if (!matchesOrderRequest(saved, order)) {
+        throw new HttpsError("already-exists",
+          "This checkout request was used with different details. Start checkout again.");
       }
       return {
         orderId: existing.id,
@@ -69,7 +73,7 @@ exports.placeOrder = onCall({ enforceAppCheck: true }, async (request) => {
       items: pricedOrder.orderItems,
       currency: "PKR",
       totalPkr: pricedOrder.totalPkr,
-      status: "confirmed",
+      status: "received",
       paymentMethod: "cod",
       paymentStatus: "pending_collection",
       createdAt: FieldValue.serverTimestamp()
@@ -78,7 +82,7 @@ exports.placeOrder = onCall({ enforceAppCheck: true }, async (request) => {
     return {
       orderId: orderRef.id,
       orderNumber: order.requestId.substring(0, 12).toUpperCase(),
-      status: "confirmed",
+      status: "received",
       totalPkr: pricedOrder.totalPkr,
       paymentMethod: "cod"
     };

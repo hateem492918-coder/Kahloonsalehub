@@ -68,4 +68,17 @@ function normalizeOrderRequest(data) {
   };
 }
 
-module.exports = { normalizeOrderRequest };
+function matchesOrderRequest(saved, request) {
+  if (!saved || !saved.customer || !Array.isArray(saved.items)
+      || saved.customer.name !== request.customer.name
+      || saved.customer.phone !== request.customer.phone
+      || saved.customer.address !== request.customer.address
+      || saved.items.length !== request.items.length) {
+    return false;
+  }
+
+  return request.items.every((item) => saved.items.some((savedItem) =>
+    savedItem.productId === item.productId && savedItem.quantity === item.quantity));
+}
+
+module.exports = { normalizeOrderRequest, matchesOrderRequest };

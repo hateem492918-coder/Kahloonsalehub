@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "node --test",
-    "lint": "node --check index.js && node --check src/order-validation.js && node --check src/order-pricing.js && node --check scripts/seed-products.js"
+    "lint": "node --check index.js && node --check src/catalog.js && node --check src/order-validation.js && node --check src/order-pricing.js && node --check scripts/seed-products.js && node --check test/order-validation.test.js"
   },
   "dependencies": {
     "firebase-admin": "^13.5.0",

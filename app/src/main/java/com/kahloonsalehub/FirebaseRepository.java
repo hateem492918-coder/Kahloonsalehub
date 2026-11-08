@@ -75,7 +75,13 @@ final class FirebaseRepository {
 
             functions.getHttpsCallable("placeOrder")
                     .call(payload)
-                    .addOnSuccessListener(result -> onSuccess.onSuccess(readOrderResult(result)))
+                    .addOnSuccessListener(result -> {
+                        try {
+                            onSuccess.onSuccess(readOrderResult(result));
+                        } catch (IllegalStateException exception) {
+                            onFailure.onFailure(exception);
+                        }
+                    })
                     .addOnFailureListener(onFailure);
         };
 

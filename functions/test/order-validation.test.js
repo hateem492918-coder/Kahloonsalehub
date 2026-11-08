@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { normalizeOrderRequest } = require("../src/order-validation");
+const { matchesOrderRequest, normalizeOrderRequest } = require("../src/order-validation");
 const { priceOrderItems } = require("../src/order-pricing");
 
 const validOrder = () => ({
@@ -53,6 +53,21 @@ test("rejects non-UUID request IDs", () => {
   const request = validOrder();
   request.requestId = "not-a-uuid";
   assert.throws(() => normalizeOrderRequest(request), /request ID/);
+});
+
+test("recognizes an idempotent retry but rejects changed checkout data", () => {
+  const request = normalizeOrderRequest(validOrder());
+  const saved = {
+    customer: request.customer,
+    items: [{ productId: "1", quantity: 2, unitPricePkr: 2499 }]
+  };
+  assert.equal(matchesOrderRequest(saved, request), true);
+
+  const changedRequest = normalizeOrderRequest({
+    ...validOrder(),
+    items: [{ productId: "2", quantity: 2 }]
+  });
+  assert.equal(matchesOrderRequest(saved, changedRequest), false);
 });
 
 test("prices order lines from the server catalog instead of client prices", () => {
