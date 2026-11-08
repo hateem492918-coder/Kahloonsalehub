@@ -5,6 +5,7 @@ const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const { normalizeOrderRequest } = require("./src/order-validation");
+const { priceOrderItems } = require("./src/order-pricing");
 
 setGlobalOptions({ region: "asia-south1" });
 initializeApp();
@@ -46,35 +47,18 @@ exports.placeOrder = onCall({ enforceAppCheck: true }, async (request) => {
 
     const productRefs = order.items.map((item) => db.collection("products").doc(item.productId));
     const productSnapshots = await Promise.all(productRefs.map((ref) => transaction.get(ref)));
-    const orderItems = [];
-    let totalPkr = 0;
-
-    for (let index = 0; index < order.items.length; index += 1) {
-      const item = order.items[index];
-      const productSnapshot = productSnapshots[index];
-      if (!productSnapshot.exists || productSnapshot.get("active") !== true) {
-        throw new HttpsError("failed-precondition", "A product in your cart is no longer available.");
+    const productsById = new Map(productSnapshots.map((snapshot) => [
+      snapshot.id,
+      snapshot.exists ? snapshot.data() : null
+    ]));
+    let pricedOrder;
+    try {
+      pricedOrder = priceOrderItems(order.items, productsById);
+    } catch (error) {
+      if (error.code === "failed-precondition" || error.code === "invalid-argument") {
+        throw new HttpsError(error.code, error.message);
       }
-      const product = productSnapshot.data();
-      if (!Number.isSafeInteger(product.pricePkr) || product.pricePkr < 1) {
-        throw new HttpsError("failed-precondition", "A product price is not configured correctly.");
-      }
-
-      const lineTotalPkr = product.pricePkr * item.quantity;
-      if (!Number.isSafeInteger(lineTotalPkr)) {
-        throw new HttpsError("invalid-argument", "The cart total is too large.");
-      }
-      totalPkr += lineTotalPkr;
-      if (!Number.isSafeInteger(totalPkr)) {
-        throw new HttpsError("invalid-argument", "The cart total is too large.");
-      }
-      orderItems.push({
-        productId: item.productId,
-        name: product.name,
-        unitPricePkr: product.pricePkr,
-        quantity: item.quantity,
-        lineTotalPkr
-      });
+      throw error;
     }
 
     transaction.create(orderRef, {
@@ -82,9 +66,9 @@ exports.placeOrder = onCall({ enforceAppCheck: true }, async (request) => {
       requestId: order.requestId,
       orderNumber: order.requestId.substring(0, 8).toUpperCase(),
       customer: order.customer,
-      items: orderItems,
+      items: pricedOrder.orderItems,
       currency: "PKR",
-      totalPkr,
+      totalPkr: pricedOrder.totalPkr,
       status: "confirmed",
       paymentMethod: "cod",
       paymentStatus: "pending_collection",
@@ -95,7 +79,7 @@ exports.placeOrder = onCall({ enforceAppCheck: true }, async (request) => {
       orderId: orderRef.id,
       orderNumber: order.requestId.substring(0, 8).toUpperCase(),
       status: "confirmed",
-      totalPkr,
+      totalPkr: pricedOrder.totalPkr,
       paymentMethod: "cod"
     };
   });

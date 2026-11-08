@@ -112,13 +112,18 @@ final class FirebaseRepository {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private Map<String, Object> readOrderResult(HttpsCallableResult result) {
         Object data = result.getData();
-        if (!(data instanceof Map)) {
+        if (!(data instanceof Map<?, ?>)) {
             throw new IllegalStateException("The order service returned an invalid response.");
         }
-        Map<String, Object> response = (Map<String, Object>) data;
+        Map<?, ?> rawResponse = (Map<?, ?>) data;
+        Map<String, Object> response = new HashMap<>();
+        for (Map.Entry<?, ?> entry : rawResponse.entrySet()) {
+            if (entry.getKey() instanceof String) {
+                response.put((String) entry.getKey(), entry.getValue());
+            }
+        }
         Object orderId = response.get("orderId");
         Object totalPkr = response.get("totalPkr");
         if (!(orderId instanceof String) || !(totalPkr instanceof Number)) {

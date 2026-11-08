@@ -3,6 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { normalizeOrderRequest } = require("../src/order-validation");
+const { priceOrderItems } = require("../src/order-pricing");
 
 const validOrder = () => ({
   requestId: "acde4802-1c70-4e8d-aef4-e8ee5de1bac2",
@@ -52,4 +53,24 @@ test("rejects non-UUID request IDs", () => {
   const request = validOrder();
   request.requestId = "not-a-uuid";
   assert.throws(() => normalizeOrderRequest(request), /request ID/);
+});
+
+test("prices order lines from the server catalog instead of client prices", () => {
+  const request = normalizeOrderRequest(validOrder());
+  const priced = priceOrderItems(request.items, new Map([
+    ["1", { active: true, name: "Wireless Earbuds", pricePkr: 2499 }]
+  ]));
+  assert.equal(priced.totalPkr, 4998);
+  assert.equal(priced.orderItems[0].unitPricePkr, 2499);
+  assert.equal(priced.orderItems[0].lineTotalPkr, 4998);
+});
+
+test("rejects inactive products and invalid server prices", () => {
+  const request = normalizeOrderRequest(validOrder());
+  assert.throws(() => priceOrderItems(request.items, new Map([
+    ["1", { active: false, name: "Wireless Earbuds", pricePkr: 2499 }]
+  ])), { code: "failed-precondition" });
+  assert.throws(() => priceOrderItems(request.items, new Map([
+    ["1", { active: true, name: "Wireless Earbuds", pricePkr: 0 }]
+  ])), { code: "failed-precondition" });
 });

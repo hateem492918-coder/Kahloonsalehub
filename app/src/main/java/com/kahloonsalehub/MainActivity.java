@@ -75,6 +75,7 @@ public final class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         if ("checkout".equals(screen)) {
+            checkoutRequestId = null;
             screen = "cart";
         } else if ("detail".equals(screen) || "cart".equals(screen)) {
             screen = "home";
@@ -339,6 +340,7 @@ public final class MainActivity extends Activity {
                     marginParams(-1, -2, 0, 7, 0, 13));
             Button checkout = primaryButton("Continue to checkout");
             checkout.setOnClickListener(v -> {
+                checkoutRequestId = UUID.randomUUID().toString();
                 screen = "checkout";
                 render();
             });
