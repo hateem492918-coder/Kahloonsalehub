@@ -1,36 +1,24 @@
 # Copilot instructions for Kahloonsalehub
 
-## Repository status
-
-- This repository is currently a minimal bootstrap: the root contains only `README.md`, `.gitignore`, and licensing metadata. There are no application sources, Gradle modules, package manifests, or CI files checked in yet.
-- The `.gitignore` strongly suggests an Android/Gradle project, but the actual Android project files are not present in this snapshot. Treat this as a pre-project or intentionally empty repo until confirmed by future commits.
-
 ## Build, test, and lint commands
 
-- There are no verified build, test, or lint commands in the current repository state.
-- Do not assume a framework or runtime before project files are present.
-- If this repository is later initialized as an Android app, the standard commands to look for are:
-  - `./gradlew assembleDebug`
-  - `./gradlew testDebugUnitTest`
-  - `./gradlew lintDebug`
-  - Single test: `./gradlew testDebugUnitTest --tests 'com.example.MyTest'` (or the equivalent package/class path in the app)
-- Until the Android project exists, validation should be limited to checking whether the expected project files and Gradle wrapper are present before running any command.
+- Build debug APK: `./gradlew :app:assembleDebug`
+- Run app unit tests: `./gradlew :app:testDebugUnitTest`
+- Run one unit test class: `./gradlew :app:testDebugUnitTest --tests 'com.kahloonsalehub.SomeTest'`
+- Run Android lint: `./gradlew :app:lintDebug`
+- The project uses Android Gradle Plugin 8.7.3, compile/target SDK 35, min SDK 23, and Java 17.
+- Tests and lint tasks may need to be added alongside future features; there are no tests or CI workflows in the current project.
 
 ## High-level architecture
 
-- The repo appears to be intended as an Android sales app for Lahore, Pakistan, based on the project name and the Android-specific entries in `.gitignore`.
-- The current codebase does not yet contain a meaningful app structure; the "big picture" is therefore uncertain and should be inferred from the eventual Android project layout rather than from existing sources.
-- When the real project is added, prefer Android/Gradle conventions over ad hoc project scaffolding: app modules, resource folders, manifests, and Kotlin/Java source layout should match the chosen Android structure.
-- Avoid inventing a server, web app, or multi-package architecture unless future files confirm that is the actual stack.
+- This is a native Java Android app with a single `app` module and a programmatic, single-activity storefront UI in `MainActivity`.
+- `StoreDatabase` is the local source of truth: it seeds the sample catalog and persists cart quantities and placed cash-on-delivery orders in SQLite. `Product` and `CartLine` are the small data models used by the UI and database.
+- The activity swaps between home/search/category browsing, product detail, cart, checkout, and order confirmation. Cart and order data survive app restarts; sample product data does not come from a network service.
+- This is a local-first starter, not a connected marketplace backend. Do not imply that checkout transmits an order or performs payment.
 
 ## Key conventions
 
-- Preserve the current minimal repository state; do not add frameworks or generated files without evidence that the repo is intended to use them.
-- When Android project files are introduced, keep the structure aligned with standard Android Gradle conventions rather than mixing app, library, and web conventions in the same repo.
-- Prefer small, focused changes. This repo is too early-stage to justify broad refactors or framework migrations.
-- Use the same naming and filesystem conventions as the final app stack; if this becomes an Android app, keep package names, module names, and resource organization consistent with Android expectations.
-
-## Notes for future Copilot sessions
-
-- Be conservative about assumptions: the repository is currently incomplete, and the correct architecture should be inferred from the files that appear, rather than from the README alone.
-- If a new project skeleton is added (for example an Android Gradle app), update these instructions to reflect the actual module layout, package names, and test/lint commands that are present in that project.
+- Keep Android code under package `com.kahloonsalehub` and follow the existing Java/Gradle module structure.
+- Keep catalog/cart/order persistence in `StoreDatabase`; when changing its schema, increment `DATABASE_VERSION` and implement a migration rather than dropping user data.
+- The UI is built with platform Android views without a UI framework dependency. Preserve the existing orange/neutral visual palette and keep currency display in PKR (`Rs`).
+- Treat current product records as demonstration content. Product/category/search filtering should continue to use parameterized SQLite queries.
