@@ -34,6 +34,8 @@ public final class MainActivity extends Activity {
     private long lastOrderId;
     private LinearLayout root;
     private LinearLayout content;
+    private TextView headerCartCount;
+    private TextView footerCartCount;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,6 +64,8 @@ public final class MainActivity extends Activity {
     }
 
     private void render() {
+        headerCartCount = null;
+        footerCartCount = null;
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(CANVAS);
@@ -228,6 +232,7 @@ public final class MainActivity extends Activity {
         add.setBackground(roundRect(Color.rgb(255, 243, 235), Color.rgb(255, 243, 235), 0, 10));
         add.setOnClickListener(v -> {
             database.addToCart(product.id);
+            refreshCartCount();
             Toast.makeText(this, "Added to your cart", Toast.LENGTH_SHORT).show();
         });
         priceRow.addView(add);
@@ -308,7 +313,7 @@ public final class MainActivity extends Activity {
             subtotal.addView(text("Subtotal", 15, MUTED, false), new LinearLayout.LayoutParams(0, -2, 1));
             subtotal.addView(text(formatPrice(total), 16, INK, true));
             summary.addView(subtotal);
-            summary.addView(text("Delivery fee calculated at checkout", 12, MUTED, false),
+            summary.addView(text("Free delivery within Lahore", 12, MUTED, false),
                     marginParams(-1, -2, 0, 7, 0, 13));
             Button checkout = primaryButton("Continue to checkout");
             checkout.setOnClickListener(v -> {
@@ -368,7 +373,7 @@ public final class MainActivity extends Activity {
         scroll.addView(content);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         content.addView(text("Delivery details", 23, INK, true), marginParams(-1, -2, 0, 0, 0, 6));
-        content.addView(text("We currently deliver within Lahore.", 14, MUTED, false),
+        content.addView(text("Free delivery within Lahore.", 14, MUTED, false),
                 marginParams(-1, -2, 0, 0, 0, 18));
         EditText name = formField("Full name");
         EditText phone = formField("Phone number");
@@ -466,15 +471,15 @@ public final class MainActivity extends Activity {
         brand.addView(text("kahloon", 21, ORANGE, true));
         brand.addView(text("SALE HUB  ·  LAHORE", 9, MUTED, true));
         bar.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView cart = text("🛒 " + database.getCartCount(), 15, INK, true);
-        cart.setGravity(Gravity.CENTER);
-        cart.setPadding(dp(10), dp(8), dp(10), dp(8));
-        cart.setBackground(roundRect(Color.rgb(255, 243, 235), Color.rgb(255, 243, 235), 0, 12));
-        cart.setOnClickListener(v -> {
+        headerCartCount = text("🛒 " + database.getCartCount(), 15, INK, true);
+        headerCartCount.setGravity(Gravity.CENTER);
+        headerCartCount.setPadding(dp(10), dp(8), dp(10), dp(8));
+        headerCartCount.setBackground(roundRect(Color.rgb(255, 243, 235), Color.rgb(255, 243, 235), 0, 12));
+        headerCartCount.setOnClickListener(v -> {
             screen = "cart";
             render();
         });
-        bar.addView(cart);
+        bar.addView(headerCartCount);
         return bar;
     }
 
@@ -488,16 +493,26 @@ public final class MainActivity extends Activity {
             screen = "home";
             render();
         });
-        TextView cart = text("🛒  Cart  (" + database.getCartCount() + ")", 14,
+        footerCartCount = text("🛒  Cart  (" + database.getCartCount() + ")", 14,
                 "cart".equals(screen) ? ORANGE : MUTED, true);
-        cart.setGravity(Gravity.CENTER);
-        cart.setOnClickListener(v -> {
+        footerCartCount.setGravity(Gravity.CENTER);
+        footerCartCount.setOnClickListener(v -> {
             screen = "cart";
             render();
         });
         nav.addView(home, new LinearLayout.LayoutParams(0, dp(42), 1));
-        nav.addView(cart, new LinearLayout.LayoutParams(0, dp(42), 1));
+        nav.addView(footerCartCount, new LinearLayout.LayoutParams(0, dp(42), 1));
         return nav;
+    }
+
+    private void refreshCartCount() {
+        int count = database.getCartCount();
+        if (headerCartCount != null) {
+            headerCartCount.setText("🛒 " + count);
+        }
+        if (footerCartCount != null) {
+            footerCartCount.setText("🛒  Cart  (" + count + ")");
+        }
     }
 
     private EditText formField(String hint) {
