@@ -1,0 +1,17 @@
+{
+  "name": "kahloonsalehub-functions",
+  "private": true,
+  "description": "Firebase backend for Kahloon Sale Hub",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "test": "node --test",
+    "lint": "node --check index.js && node --check src/order-validation.js && node --check scripts/seed-products.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.5.0",
+    "firebase-functions": "^6.4.0"
+  }
+}

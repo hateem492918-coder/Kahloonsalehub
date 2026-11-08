@@ -15,8 +15,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.text.NumberFormat;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
 
 public final class MainActivity extends Activity {
     private static final int ORANGE = Color.rgb(245, 114, 36);
@@ -27,11 +30,16 @@ public final class MainActivity extends Activity {
     private static final String[] CATEGORIES = {"All", "Electronics", "Fashion", "Home", "Beauty", "Sports"};
 
     private StoreDatabase database;
+    private FirebaseRepository firebaseRepository;
+    private List<Product> remoteProducts = new ArrayList<>();
+    private boolean remoteCatalogLoaded;
     private String screen = "home";
     private String selectedCategory = "All";
     private String searchQuery = "";
     private long selectedProductId;
-    private long lastOrderId;
+    private String lastOrderNumber = "";
+    private long lastOrderTotalPkr;
+    private String checkoutRequestId;
     private LinearLayout root;
     private LinearLayout content;
     private TextView headerCartCount;
@@ -41,6 +49,20 @@ public final class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         database = new StoreDatabase(this);
+        try {
+            firebaseRepository = new FirebaseRepository(this);
+            firebaseRepository.loadProducts(products -> {
+                remoteProducts = products;
+                remoteCatalogLoaded = true;
+                database.syncProducts(products);
+                if ("home".equals(screen)) {
+                    render();
+                }
+            }, error -> Toast.makeText(this, "Could not load the online catalog: " +
+                    error.getLocalizedMessage(), Toast.LENGTH_LONG).show());
+        } catch (IllegalStateException exception) {
+            Toast.makeText(this, exception.getMessage(), Toast.LENGTH_LONG).show();
+        }
         render();
     }
 
@@ -108,10 +130,10 @@ public final class MainActivity extends Activity {
         LinearLayout heading = row();
         heading.addView(text(searchQuery.isEmpty() ? "Popular picks" : "Search results", 19, INK, true),
                 new LinearLayout.LayoutParams(0, -2, 1));
-        TextView count = text(database.getProducts(selectedCategory, searchQuery).size() + " items", 13, MUTED, false);
+        TextView count = text(getVisibleProducts().size() + " items", 13, MUTED, false);
         heading.addView(count);
         content.addView(heading, marginParams(-1, -2, 0, 18, 0, 10));
-        addProductGrid(database.getProducts(selectedCategory, searchQuery));
+        addProductGrid(getVisibleProducts());
         root.addView(buildBottomBar());
     }
 
@@ -241,7 +263,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showProductDetail() {
-        Product product = database.getProduct(selectedProductId);
+        Product product = findProduct(selectedProductId);
         if (product == null) {
             screen = "home";
             render();
@@ -397,6 +419,8 @@ public final class MainActivity extends Activity {
         paymentText.addView(text("Pay when your order arrives", 13, MUTED, false));
         payment.addView(paymentText);
         content.addView(payment, marginParams(-1, -2, 0, 0, 0, 18));
+        content.addView(text("Easypaisa online payment will be enabled after the merchant API and callback details are configured.",
+                13, MUTED, false), marginParams(-1, -2, 0, 0, 0, 14));
         long total = cartTotal(database.getCart());
         LinearLayout totalRow = row();
         totalRow.addView(text("Order total", 16, INK, true), new LinearLayout.LayoutParams(0, -2, 1));
@@ -415,15 +439,43 @@ public final class MainActivity extends Activity {
                 phone.setError("Enter a valid phone number");
                 return;
             }
-            try {
-                lastOrderId = database.placeOrder(customerName, customerPhone, customerAddress);
-                screen = "success";
-                render();
-            } catch (IllegalStateException exception) {
-                Toast.makeText(this, exception.getMessage(), Toast.LENGTH_SHORT).show();
+            if (firebaseRepository == null) {
+                Toast.makeText(this, "Connect this app to Firebase before placing an online order.",
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
+            List<CartLine> cart = database.getCart();
+            if (cart.isEmpty()) {
+                Toast.makeText(this, "Your cart is empty.", Toast.LENGTH_SHORT).show();
                 screen = "cart";
                 render();
+                return;
             }
+            if (checkoutRequestId == null) {
+                checkoutRequestId = UUID.randomUUID().toString();
+            }
+            placeOrder.setEnabled(false);
+            firebaseRepository.placeOrder(checkoutRequestId, customerName, customerPhone, customerAddress, cart,
+                    result -> {
+                Object orderNumber = result.get("orderNumber");
+                Object total = result.get("totalPkr");
+                if (!(orderNumber instanceof String) || !(total instanceof Number)) {
+                    placeOrder.setEnabled(true);
+                    Toast.makeText(this, "The order service returned an invalid response.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                lastOrderNumber = (String) orderNumber;
+                lastOrderTotalPkr = ((Number) total).longValue();
+                database.clearCart();
+                checkoutRequestId = null;
+                screen = "success";
+                render();
+            }, error -> {
+                placeOrder.setEnabled(true);
+                String message = error.getLocalizedMessage();
+                Toast.makeText(this, "Order could not be placed" +
+                        (message == null ? "." : ": " + message), Toast.LENGTH_LONG).show();
+            });
         });
         content.addView(placeOrder, marginParams(-1, 52, 0, 0, 0, 12));
     }
@@ -439,11 +491,11 @@ public final class MainActivity extends Activity {
         icon.setBackground(roundRect(Color.rgb(47, 160, 112), Color.rgb(47, 160, 112), 0, 50));
         body.addView(icon, marginParams(88, 88, 0, 0, 0, 22));
         body.addView(text("Order placed!", 25, INK, true), marginParams(-1, -2, 0, 0, 0, 8));
-        TextView message = text("Thanks for shopping with Kahloon Sale Hub. Your cash-on-delivery order has been saved on this device.",
+        TextView message = text("Thanks for shopping with Kahloon Sale Hub. Your cash-on-delivery order has been saved online.",
                 15, MUTED, false);
         message.setGravity(Gravity.CENTER);
         body.addView(message, marginParams(-1, -2, 0, 0, 0, 10));
-        TextView order = text("Order #" + lastOrderId, 14, INK, true);
+        TextView order = text("Order #" + lastOrderNumber + "  ·  " + formatPrice(lastOrderTotalPkr), 14, INK, true);
         order.setGravity(Gravity.CENTER);
         body.addView(order, marginParams(-1, -2, 0, 0, 0, 24));
         Button home = primaryButton("Continue shopping");
@@ -585,6 +637,39 @@ public final class MainActivity extends Activity {
             total += line.getSubtotal();
         }
         return total;
+    }
+
+    private List<Product> getVisibleProducts() {
+        List<Product> catalog = remoteCatalogLoaded
+                ? remoteProducts
+                : database.getProducts("All", "");
+        List<Product> visible = new ArrayList<>();
+        for (Product product : catalog) {
+            if (!"All".equals(selectedCategory) && !selectedCategory.equals(product.category)) {
+                continue;
+            }
+            if (!searchQuery.trim().isEmpty()) {
+                String query = searchQuery.trim().toLowerCase(Locale.ROOT);
+                if (!product.name.toLowerCase(Locale.ROOT).contains(query)
+                        && !product.category.toLowerCase(Locale.ROOT).contains(query)) {
+                    continue;
+                }
+            }
+            visible.add(product);
+        }
+        return visible;
+    }
+
+    private Product findProduct(long id) {
+        if (remoteCatalogLoaded) {
+            for (Product product : remoteProducts) {
+                if (product.id == id) {
+                    return product;
+                }
+            }
+            return null;
+        }
+        return database.getProduct(id);
     }
 
     private String formatPrice(long amount) {

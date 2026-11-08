@@ -115,6 +115,32 @@ final class StoreDatabase extends SQLiteOpenHelper {
         }
     }
 
+    void syncProducts(List<Product> products) {
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            for (Product product : products) {
+                ContentValues values = new ContentValues();
+                values.put("_id", product.id);
+                values.put("name", product.name);
+                values.put("category", product.category);
+                values.put("emoji", product.emoji);
+                values.put("price", product.price);
+                values.put("original_price", product.originalPrice);
+                values.put("rating", product.rating);
+                values.put("description", product.description);
+                db.insertWithOnConflict("products", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    void clearCart() {
+        getWritableDatabase().delete("cart", null, null);
+    }
+
     void addToCart(long productId) {
         SQLiteDatabase db = getWritableDatabase();
         db.beginTransaction();
